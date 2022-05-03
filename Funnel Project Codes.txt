@@ -1,0 +1,235 @@
+-- Quiz Funnel
+ 
+SELECT * FROM survey
+LIMIT 10;
+
+SELECT question, COUNT(DISTINCT user_id) FROM survey
+GROUP BY question;
+
+SELECT * FROM quiz
+LIMIT 5;
+
+SELECT * FROM home_try_on
+LIMIT 5;
+
+SELECT * FROM purchase
+LIMIT 5;
+
+SELECT DISTINCT q.user_id,
+ h.user_id IS NOT NULL AS 'is_home_try_on',
+ h.number_of_pairs,
+ p.user_id IS NOT NULL AS 'is_purchase'
+FROM quiz AS 'q'
+LEFT JOIN home_try_on AS 'h' 
+ON q.user_id = h.user_id
+LEFT JOIN purchase AS 'p'
+ON q.user_id = p.user_id
+LIMIT 10;
+
+
+WITH q AS (
+  SELECT '1-quiz' AS stage,
+  COUNT(DISTINCT user_id)
+  FROM quiz
+),
+h AS(
+  SELECT '2-home-try-on' AS stage,
+  COUNT(DISTINCT user_id)
+  FROM home_try_on
+),
+p AS(
+  SELECT '3-purchase' AS stage,
+  COUNT(DISTINCT user_id)
+  FROM purchase
+)
+SELECT * FROM q
+UNION 
+SELECT * FROM h
+UNION
+SELECT * FROM p;
+
+WITH base_table AS(
+  SELECT DISTINCT q.user_id,
+  h.user_id IS NOT NULL AS 'is_home_try_on',
+  h.number_of_pairs AS 'AB_variant',
+  p.user_id IS NOT NULL AS 'is_purchase'
+  FROM quiz q
+  LEFT JOIN home_try_on h
+  ON q.user_id = h.user_id
+  LEFT JOIN purchase p
+  ON p.user_id = q.user_id
+)
+SELECT AB_variant, 
+SUM(is_home_try_on) AS 'home_trial', 
+SUM(is_purchase) AS 'purchase'
+FROM base_table
+GROUP BY AB_variant
+HAVING home_trial > 0;
+
+
+
+From funnel examples
+
+Using GROUP BY, count the number of distinct user_id‘s for each value of modal_text. This will tell us the number of users completing each step of the funnel.
+
+This time, sort modal_text so that your funnel is in order.
+
+Try using a GROUP BY statement to calculate COUNT(DISTINCT user_id) for each modal_text.
+
+And don’t forget ORDER BY to sort.
+
+SELECT modal_text, 
+   COUNT(DISTINCT user_id)
+FROM onboarding_modals
+GROUP BY 1
+ORDER BY 1;
+Modal 1 - 1000
+Modal 2 - 695
+Modal 3 - 575
+Modal 4 - 447
+Modal 5 - 379
+
+
+The previous query combined both the control and variant groups.
+
+We can use a CASE statement within our COUNT() aggregate so that we only count user_ids whose ab_group is equal to ‘control’:
+
+SELECT modal_text,
+  COUNT(DISTINCT CASE
+    WHEN ab_group = 'control' THEN user_id
+    END) AS 'control_clicks'
+FROM onboarding_modals
+GROUP BY 1
+ORDER BY 1;
+
+
+Add an additional column to your previous query that counts the number of clicks from the variant group and alias it as ‘variant_clicks’.
+
+Your third column should be:
+
+COUNT(DISTINCT CASE
+  WHEN ab_group = 'variant' THEN user_id
+  END) AS 'variant_clicks'
+Don’t forget that columns need to be separated by a comma!
+
+SELECT modal_text,
+  COUNT(DISTINCT CASE
+    WHEN ab_group = 'control' THEN user_id
+    END) AS 'control_clicks',
+  COUNT(DISTINCT CASE
+    WHEN ab_group = 'variant' THEN user_id
+    END) AS 'variant_clicks'
+FROM onboarding_modals
+GROUP BY 1
+ORDER BY 1;
+The result should have three columns:
+
+modal_text
+control_clicks
+variant_clicks
+Now you can see the differences between the control and variant side by side!
+
+
+Start by selecting all rows (*) from the LEFT JOIN of:
+
+browse (aliased as b)
+checkout (aliased as c)
+purchase (aliased as p)
+Be sure to use this order to make sure that we get all of the rows.
+
+LIMIT your results to the first 50 so that it loads quickly.
+
+browse will LEFT JOIN to checkout on b.user_id = c.user_id.
+
+What will checkout to purchase be joined on?
+
+SELECT *
+FROM browse AS 'b'
+LEFT JOIN checkout AS 'c'
+  ON c.user_id = b.user_id
+LEFT JOIN purchase AS 'p'
+  ON p.user_id = c.user_id
+LIMIT 50;
+Woah, we just joined three different tables!
+
+This is the first time we joined three tables using multiple LEFT JOINs.
+
+The result will have a bunch of columns:
+
+user_id
+browse_date
+item_id
+user_id
+checkout_date
+item_id
+user_id
+purchase_date
+item_id
+
+
+But we don’t want all of these columns in the result!
+
+Instead of selecting all columns using *, let’s select these four:
+
+DISTINCT b.browse_date
+b.user_id
+c.user_id IS NOT NULL AS 'is_checkout'
+p.user_id IS NOT NULL AS 'is_purchase'
+Edit your query so that you select these columns.
+
+For review, IS NOT NULL will return:
+
+1 (True) if a non-empty value is found
+0 (False) if a NULL value is found
+Why do we use this code?
+
+c.user_id IS NOT NULL AS 'is_checkout'
+If a user_id is not in the checkout table (aliased as c), then b.user_id will be filled in, but c.user_id will be NULL because of our LEFT JOIN.
+
+Answer:
+
+SELECT DISTINCT b.browse_date,
+   b.user_id,
+   c.user_id IS NOT NULL AS 'is_checkout',
+   p.user_id IS NOT NULL AS 'is_purchase'
+FROM browse AS 'b'
+LEFT JOIN checkout 'c'
+  ON c.user_id = b.user_id
+LEFT JOIN purchase 'p'
+  ON p.user_id = c.user_id
+LIMIT 50;
+
+
+We’ve created a new table that combined all of our data:
+
+browser_date	user_id	is_checkout	is_purchase
+2017-12-20	6a7617321513	1	0
+2017-12-20	022d871cdcde	0	0
+…	…	…	…
+
+Here, 1 represents True and 0 represents False.
+
+Once we have the data in this format, we can analyze it in several ways.
+
+Let’s put the whole thing in a WITH statement so that we can continue on building our query.
+
+We will give the temporary table the name funnels:
+
+WITH funnels AS (
+  SELECT DISTINCT b.browse_date,
+     b.user_id,
+     c.user_id IS NOT NULL AS 'is_checkout',
+     p.user_id IS NOT NULL AS 'is_purchase'
+  FROM browse AS 'b'
+  LEFT JOIN checkout AS 'c'
+    ON c.user_id = b.user_id
+  LEFT JOIN purchase AS 'p'
+    ON p.user_id = c.user_id)
+SELECT COUNT(*) AS 'num_browse',
+   SUM(is_checkout) AS 'num_checkout',
+   SUM(is_purchase) AS 'num_purchase',
+   1.0 * SUM(is_checkout) / COUNT(user_id) AS 'browse_to_checkout',
+   1.0 * SUM(is_purchase) / SUM(is_checkout) AS 'checkout_to_purchase'
+FROM funnels;
+
+
